@@ -1,8 +1,10 @@
 from keras.models import Sequential
-from keras.layers import Dense, Activation, MaxPooling2D, BatchNormalization, Convolution2D, ZeroPadding2D, Dropout, Upsampling2D
-
-# linkdump for training gans
-# https://github.com/soumith/ganhacks 
+from keras.layers import Dense, Activation, Dropout
+from keras.layers.convolutional import Convolution2D, Upsampling2D, MaxPooling2D, ZeroPadding2D
+from keras.layers.normalization import BatchNormalization
+from keras.optimizers import SGD
+import cv2
+import numpy as np
 
 # random segnet like hack model
 def generator_model():
@@ -108,4 +110,3 @@ def discriminator_model():
 	model.compile(optimizer=sgd, loss='categorical_crossentropy')
 
 	return model
-
