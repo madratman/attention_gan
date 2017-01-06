@@ -1,5 +1,5 @@
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout
+from keras.models import Sequential, Model
+from keras.layers import Dense, Activation, Dropout, Input
 from keras.layers.convolutional import Convolution2D, Upsampling2D, MaxPooling2D, ZeroPadding2D
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD
@@ -50,7 +50,9 @@ def generator_model():
 	model.add(Convolution2D(64,3,3,border_mode='same'))
 	model.add(BatchNormalization())
 
-	#todo loss
+	#todo this might be wrong
+	model.add(Convolution2D(1,1,1, border_mode='same')) # single mask output using 1*! convs
+	# model.compile(loss="categorical_crossentropy", optimizer='adadelta')
 
 	return model
 
@@ -104,9 +106,12 @@ def discriminator_model():
 	model.add(Dropout(0.5))
 	model.add(Dense(4096, activation='relu'))
 	model.add(Dropout(0.5))
-	model.add(Dense(1000, activation='softmax'))
+	model.add(Dense(200, activation='softmax')) #200 number of birds
 	
-	sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True) # todo adadelta
-	model.compile(optimizer=sgd, loss='categorical_crossentropy')
+	# sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True) # todo adadelta
+	# model.compile(optimizer='adadelta', loss='categorical_crossentropy')
 
 	return model
+
+def train():
+	input_to_gan = Input(shape=(batch_size,3,224,224))
