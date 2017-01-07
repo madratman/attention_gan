@@ -1,9 +1,9 @@
 import os, cv2
 import numpy as np
 from pprint import pprint
-# from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
 
-FLAG_TRAIN_TEST_SPLIT_FROM_SCRATCH = 1
+FLAG_TRAIN_TEST_SPLIT_FROM_SCRATCH = 0
 
 images_dir = 'data/CUB_200_2011/images'
 segmentation_label_dir = 'data/segmentations'
@@ -76,52 +76,3 @@ if FLAG_TRAIN_TEST_SPLIT_FROM_SCRATCH==1:
 		
 		# move file
 		os.rename(old_filename, new_filename)
-
-# keras' image preprocessing datagenerator
-normalization?
-train_datagen = ImageDataGenerator(
-        rescale=1./255,
-		rotation_range=40,
-        width_shift_range=0.2,
-        height_shift_range=0.2,
-        shear_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True)
-
-test_datagen = ImageDataGenerator(
-		rescale=1./255)
-
-# visualize 
-# img = load_img('data/train/001_Black_Footed_Albatross_0007_796138.jpg')
-# x = img_to_array(img)
-# print x.dtype
-# x = x.reshape((1,)+x.shape)
-# y=np.array([1])
-
-# if not os.path.exists('data/preview'):
-#         os.makedirs('data/preview')
-
-# i=0
-# for batch in datagen.flow(x, y,batch_size=1):
-#         batch[0].reshape(batch[0].shape[1:])
-#         curr = batch[0]
-#         curr_sk = img_as_uint(curr)
-#         curr  = curr.astype(int)
-#         cv2.imwrite('data/preview/'+str(i)+'.jpeg', curr)
-#         io.save('data/preview/'+str(i)+'.png', curr_sk)
-#         i+=1
-#         print i
-#         if i>20:
-#                 break
-
-train_generator = train_datagen.flow_from_directory(
-					'data/train',
-					target_size = (224,224),
-					batch_size = 64,
-					class_mode = '')
-
-test_generator = test_datagen.flow_from_directory(
-					'data/test',
-					target_size = (224, 224),
-					batch_size = 64,
-					class_mode = 'binary')
