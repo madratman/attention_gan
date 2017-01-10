@@ -1,5 +1,5 @@
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Dropout, Input, Flatten
+from keras.layers import Dense, Activation, Dropout, Input, Flatten, merge, Merge # small m is functional api, caps is sequential
 from keras.layers.convolutional import Convolution2D, UpSampling2D, MaxPooling2D, ZeroPadding2D
 from keras.layers.normalization import BatchNormalization
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
@@ -124,26 +124,6 @@ def discriminator_model():
 	
 	return model
 
-# todo implement a masking layer?
-def discriminator_on_masked_generator_output(input_tensor, generator, discriminator):
-	model = Sequential()
-	model.add(generator)
-	model.add(Merge([input_tensor, generator], mode='mul')) # mask input image with generator's output
-	# todo should this combined model be inside main/train or here. 
-	discriminator.trainable = False
-	model.add(discriminator)
-
-# def train(no_of_epochs, batch_size):
-# 	generator = generator_model()
-# 	discriminator = discriminator_model()
-# 	combined_model = discriminator_on_masked_generator_output()
-
-# 	# todo check loss. need to add regulalarization to generator
-# 	generator.compile(loss='categorical_crossentropy', optimizer='adadelta')
-# 	discriminator.compile(loss='categorical_crossentropy', optimizer='adadelta')
-
-# 	model.fit_generator(train_generator, samples_per_epoch=2000, nb_epoch=50)
-
 def check_discriminator_training():
 	discriminator = discriminator_model()
 	discriminator.compile(loss='categorical_crossentropy', optimizer='adadelta')
@@ -167,19 +147,19 @@ def check_discriminator_training():
 
 # load everything into ram and manually generate batches. will take ~10GB for 6000 224*224 images
 def cubs_into_ram_all():
-	IMAGE_SIZE = (224,224)
-	NO_OF_TRAIN_IMAGES = 5994 # find data/train -type f | wc -l
+	image_size = (224,224)
+	no_of_training_images = 5994 # find data/train -type f | wc -l
 	train_dir = os.path.join(os.getcwd(),'data/train')
 	all_sub_dirs=sorted(os.listdir(train_dir))
-	NO_OF_CLASSES = len(all_sub_dirs)
-	X_train = np.empty((NO_OF_TRAIN_IMAGES,3)+IMAGE_SIZE, dtype='float32') #dtype?
-	y_train = np.empty(NO_OF_TRAIN_IMAGES, dtype='int')
+	no_of_classes = len(all_sub_dirs)
+	X_train = np.empty((no_of_training_images,3)+image_size, dtype='float32') #dtype?
+	y_train = np.empty(no_of_training_images, dtype='int')
 	# read, preprocess and dump all in single np array
 	category_idx = 0
 	image_idx = 0
 
-	print "no_of_classes : {}".format(NO_OF_CLASSES)
-	print "no_of_training_images : {}".format(NO_OF_TRAIN_IMAGES)
+	print "no_of_classes : {}".format(no_of_classes)
+	print "no_of_training_images : {}".format(no_of_training_images)
 	for each_dir in all_sub_dirs:
 		curr_label = category_idx
 		all_images_category = os.listdir(os.path.join(train_dir, each_dir))
@@ -190,7 +170,7 @@ def cubs_into_ram_all():
 			#print image_file
 			img = Image.open(image_file)
 			img = img.convert('RGB') # ensure 3 channel
-			img = img.resize(IMAGE_SIZE, resample=Image.NEAREST)
+			img = img.resize(image_size, resample=Image.NEAREST)
 			img_array = np.asarray(img, dtype='float32')
 			if len(img_array.shape) == 3:
 				img_array = img_array.transpose(2, 0, 1)
@@ -200,16 +180,17 @@ def cubs_into_ram_all():
 			y_train[image_idx] = category_idx #Labels are one indexed
 			image_idx += 1
 			#print image_idx
-			percent_done = float(image_idx)/NO_OF_TRAIN_IMAGES*100
+			percent_done = float(image_idx)/no_of_training_images*100
 			if not image_idx%100:
-				sys.stdout.write("\r Loading training data. {}% done".format((float(image_idx)/NO_OF_TRAIN_IMAGES)*100))
+				sys.stdout.write("\r Loading training data. {}% done".format((float(image_idx)/no_of_training_images)*100))
 				sys.stdout.flush()
 
 	sys.stdout.write("\n")
-	y_train_one_hot = convert_to_one_hot(y_train, NO_OF_CLASSES)
+	y_train_one_hot = convert_to_one_hot(y_train, no_of_classes)
 	#print "{} : {}".format(y_train[-1], y_train_one_hot[-1])
-        #print "{} : {}".format(y_train[0], y_train_one_hot[0])
-        #print "{} : {}".format(y_train[100], y_train_one_hot[100])
+	#print "{} : {}".format(y_train[0], y_train_one_hot[0])
+	#print "{} : {}".format(y_train[100], y_train_one_hot[100])
+	return (X_train, y_train_one_hot)
 
 def convert_to_one_hot(y_normal, no_of_classes):
 	y_one_hot = np.zeros((len(y_normal), no_of_classes+1))
@@ -221,12 +202,73 @@ def convert_to_one_hot(y_normal, no_of_classes):
 
 def test_convert_to_one_hot():
 	y_normal = [4,2,1,4,3,1,2,3]
-        no_of_classes = 4
-        y_one_hot = convert_to_one_hot(y_normal, no_of_classes)
-        for idx in range(len(y_normal)):
-                print "{} : {}".format(y_normal[idx], y_one_hot[idx])
+	no_of_classes = 4
+	y_one_hot = convert_to_one_hot(y_normal, no_of_classes)
+	for idx in range(len(y_normal)):
+		print "{} : {}".format(y_normal[idx], y_one_hot[idx])
 
 if __name__=='__main__':
-	cubs_into_ram_all()
 	#check_discriminator_training()
 	#test_convert_to_one_hot()
+
+	# todo make config file
+	batch_size = 64
+	no_of_epochs = 10
+	(X_train, y_train) = cubs_into_ram_all()
+
+	# shuffle data
+	assert len(X_train) == len(y_train)
+	shuff_ind = np.random.permutation(len(y_train))
+	X_train = X_train[shuff_ind]
+	y_train = y_train[shuff_ind]
+
+	# todo normalize, preprocess data
+	no_of_batches = int(X_train.shape[0]/batch_size) # batches per epoch
+
+	discriminator = discriminator_model()
+	generator = generator_model()
+
+	# combined model. 
+	# todo read the first example https://keras.io/getting-started/functional-api-guide/. We might be able to condition the mask
+	# on an embedding of text : caption or question
+
+	input_tensor = Input(shape=(3,224,224), dtype='float32', name='input_tensor') # tocheck shape 
+	generated_mask = generator(input_tensor) # all models are callable 
+	masked_input = merge([input_tensor, generated_mask], mode='mul') # mask input image with generator's output
+	discriminator.trainable = False # for the combined model, we keep the discriminator frozen.
+	discriminator_output = discriminator(masked_input)
+	combined_model = Model(input=input_tensor, output=discriminator_output)
+
+	# compile models. todo fix losses
+	generator.compile(loss='categorical_crossentropy', optimizer="adadelta")
+	combined_model.compile(loss='categorical_crossentropy', optimizer="adadelta")
+	discriminator.trainable = True
+	discriminator.compile(loss='categorical_crossentropy', optimizer="adadelta")
+
+	# this function allows as to get the masked_image from the combined model which we can use to train the discriminator. 
+	get_masked_images = theano.function([combined_model.get_input(train=False)], masked_input.get_output(train=False))
+
+	for epoch_idx in range(no_of_epochs):
+		for batch_idx in range(no_of_batches):
+			image_batch = X_train[batch_idx*batch_size:(batch_idx+1)*batch_size]
+			label_batch = y_train[batch_idx*batch_size:(batch_idx+1)*batch_size]
+
+			generated_masks = generator.predict(image_batch)
+			masked_images = get_masked_images(image_batch)
+
+			X = np.concatenate((image_batch, masked_images))
+			y = np.concatenate((label_batch, label_batch))
+			# stack labels as we're going to train masked and non masked images both. todo shuffle or not?
+
+			discriminator_loss = discriminator.train_on_batch(X, y)
+			print("Epoch : {0}, Batch : {1} of {2}, discriminator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches, discriminator_loss)
+			
+			# freeze discriminator while training combined model (or basically the generator)
+			discriminator.trainable = False
+
+			generator_loss = combined_model.train_on_batch(image_batch, generator_labels) # todo what should be generator labels?
+			print("Epoch : {0}, Batch : {1} of {2}, generator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches, generator_loss)
+			
+			discriminator.trainable = True
+
+			# todo save weights, masks, images, etc
