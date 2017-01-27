@@ -120,7 +120,7 @@ def discriminator_model():
 	model.add(Dropout(0.5))
 	model.add(Dense(4096, activation='relu'))
 	model.add(Dropout(0.5))
-	model.add(Dense(200, activation='softmax')) #200 number of birds
+	model.add(Dense(201, activation='softmax')) #200 number of birds
 
 	return model
 
@@ -152,7 +152,14 @@ if __name__=='__main__':
 	# todo make config file
 	batch_size = 16
 	no_of_epochs = 10
-	(X_train, y_train) = cubs_into_ram_all()
+
+	CUBS = cubs_loader.CUB_Loader(flag_split_train_test=0)
+	#if ((not CUBS.split_done) and (CUBS.flag_split_train_test)):
+	#   CUBS._split_into_train_and_test()
+	#if CUBS.split_done:
+	#   CUBS._cubs_into_ram_all()
+
+	(X_train, y_train) = CUBS._cubs_into_ram_all()
 
 	# shuffle data
 	assert len(X_train) == len(y_train)
@@ -161,7 +168,7 @@ if __name__=='__main__':
 	y_train = y_train[shuff_ind]
 
 	# todo normalize, preprocess data
-	no_of_batches = int(X_train.shape[0]/batch_size) # batches per epoch
+	no_of_batches_per_epoch = int(X_train.shape[0]/batch_size) # batches per epoch
 
 	discriminator = discriminator_model()
 	generator = generator_model()
@@ -190,8 +197,31 @@ if __name__=='__main__':
 	# this function allows as to get the masked_image from the combined model which we can use to train the discriminator. 
 	#get_masked_images = K.function(combined_model.inputs, masked_input.outputs(train=False))
 
+	save_every_nth = 25
+	repo_path = os.path.dirname(os.path.realpath(__file__))
+	import datetime
+	logdir = os.path.join(os.getcwd(), datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+	os.makedirs(logdir)
+
+	weights_dir_gen = os.path.join(logdir, 'weights/gen')
+	weights_dir_disc = os.path.join(logdir, 'weights/disc')
+	weights_dir_combined = os.path.join(logdir, 'weights/combined')
+	os.makedirs(weights_dir_gen)
+	os.makedirs(weights_dir_disc)
+	os.makedirs(weights_dir_combined)
+
+	logfile_gen = os.path.join(logdir, 'loss_gen.txt')
+	logfile_disc = os.path.join(logdir, 'loss_disc.txt')
+	open(logfile_gen, 'a').close()
+	open(logfile_disc, 'a').close()
+
+	no_of_digits_in_total_batches = len(str(no_of_epochs*no_of_batches_per_epoch))
+	cumulative_batch_idx = 0
+
+	print "...........starting to train............"
+
 	for epoch_idx in range(no_of_epochs):
-		for batch_idx in range(no_of_batches):
+		for batch_idx in range(no_of_batches_per_epoch):
 			image_batch = X_train[batch_idx*batch_size:(batch_idx+1)*batch_size]
 			label_batch = y_train[batch_idx*batch_size:(batch_idx+1)*batch_size]
 	
@@ -204,15 +234,30 @@ if __name__=='__main__':
 			# stack labels as we're going to train masked and non masked images both. todo shuffle or not?
 
 			discriminator_loss = discriminator.train_on_batch(X, y)
-			print("Epoch : {0}, Batch : {1} of {2}, discriminator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches, discriminator_loss))
-			
+			curr_log_disc = "Generator :: Epoch : {0}, Batch : {1} of {2}, discriminator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches_per_epoch, discriminator_loss)
+			print curr_log_disc			
 			# freeze discriminator while training combined model (or basically the generator)
 			discriminator.trainable = False
 
 			y_generator = keras_np_utils.to_categorical( [200] * batch_size )# background class is last label => idx 200 (there are 201 labels in total)
 			generator_loss = combined_model.train_on_batch(image_batch, y_generator)
-			print("Epoch : {0}, Batch : {1} of {2}, generator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches, generator_loss))
-			
+			curr_log_gen = "Discriminator :: Epoch : {0}, Batch : {1} of {2}, generator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches_per_epoch, generator_loss)
+			print curr_log_gen
+			# make D trainable at end of loop
 			discriminator.trainable = True
+
+			cumulative_batch_idx += 1
+
+			# write them logs
+			with open(logfile_gen, "a") as f:
+				f.write(curr_log_gen+'\n')
+			with open(logfile_disc, "a") as f:
+				f.write(curr_log_disc+'\n')
+			if cumulative_batch_idx%save_every_nth==0:
+				# there's certaintly a better way for this convoluted thing. but can't care enough.
+				reqd_str = str(cumulative_batch_idx).zfill(no_of_digits_in_total_batches)
+				combined_model.save(os.path.join(weights_dir_combined,'combined_batch_'+reqd_str+'.h5'))
+				discriminator.save(os.path.join(weights_dir_disc, 'disc_batch_'+reqd_str+'.h5'))
+				generator.save(os.path,join(weights_dir_gen, 'gen_batch_'+reqd_str+'.h5'))
 
 			# todo save weights, masks, images, etc

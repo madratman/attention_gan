@@ -269,9 +269,8 @@ class CUB_Loader():
 			result.append(xs)
 		return result
 
-
-if __name__=='__main__':
-	CUBS = CUB_Loader(flag_split_train_test=1)
+#if __name__=='__main__':
+	#CUBS = CUB_Loader(flag_split_train_test=1)
 	# CUBS._get_data_statistics(details_per_dir=0)
 	
 	#if ((not CUBS.split_done) and (CUBS.flag_split_train_test)):
@@ -279,6 +278,6 @@ if __name__=='__main__':
 	#if CUBS.split_done:
 	#	CUBS._cubs_into_ram_all()
 	
-	CUBS._cubs_into_ram_all()
+	#CUBS._cubs_into_ram_all()
 	# CUBS._test_remove_patch_from_img(no_of_images_to_test=199)
 	#CUBS._generate_background_images(no_of_images=60)
