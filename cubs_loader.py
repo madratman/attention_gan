@@ -1,11 +1,11 @@
-import os, cv2
+import os, cv2, sys
 import numpy as np
 from pprint import pprint
-if not (os.uname()[1]=='ratneshmadaan-Inspiron-N5010'):
-	from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+#if not (os.uname()[1]=='ratneshmadaan-Inspiron-N5010'):
+#	from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
 from PIL import Image
 import random
-
+from keras.utils import np_utils as keras_np_utils
 # the original cubs dataset has each type of bird's image's in a diff subfolder. Let's first put these into a single train and test folder
 # (the split is specified in train_test_split.txt), so that we can use keras' data preprocessors
 
@@ -31,7 +31,11 @@ class CUB_Loader():
 		self.min_height_bgd = 200
 		self.min_width_bgd = 200
 		self.background_dir = os.path.join(self.image_dir, '201.Background')
+		self.background_dir_basename = '201.Background'
 		self.background_image_path_list = []
+		self.no_of_training_images = 5994 + self.no_of_background_images//2
+		self.no_of_testing_images = 5794 + (self.no_of_background_images - self.no_of_background_images//2)
+		self.no_of_classes = 200 + 1
 
 		if os.path.exists(self.train_dir):
 			self.split_done = True
@@ -78,18 +82,20 @@ class CUB_Loader():
 			print "len(train_idx_list) : ", len(train_idx_list) # 5994
 			print "len(test_idx_list) : ", len(test_idx_list) # 5794
 
-			# background_parent_image_indices = random.sample(train_idx_list, self.avg_no_of_images_per_class)
-			# background_parent_image_paths = [self.image_id_name_map[index] for index in background_parent_image_indices]
-			# background_parent_image_bbox = [self.bboxes_map[index] for index in background_parent_image_indices]
-			# pprint(zip(background_parent_image_paths, background_parent_image_bbox))
-
 			training_image_paths = [self.image_id_name_map[train_idx] for train_idx in train_idx_list]
 			testing_image_paths = [self.image_id_name_map[test_idx] for test_idx in test_idx_list]
 			# pprint(training_image_paths)
 			# pprint(testing_image_paths)
 			self._generate_background_images(no_of_images=self.no_of_background_images) # this function fills self.background_image_path_list as well
+			#print self.background_image_path_list
+			
 			training_image_paths.append(self.background_image_path_list[:self.no_of_background_images//2]) #take first half as they are generated randomly anyway
 			testing_image_paths.append(self.background_image_path_list[self.no_of_background_images//2:]) #take first half as they are generated randomly anyway
+			# now we need to flatten the meta list (as background image names are in a list themselves)
+		 	training_image_paths = self.flatten_list(training_image_paths)
+			testing_image_paths = self.flatten_list(testing_image_paths)
+			#pprint(training_image_paths)
+			#pprint(testing_image_paths)
 
 			for idx in range(len(training_image_paths)):
 				directory_name = training_image_paths[idx].split('/')[0]
@@ -102,6 +108,7 @@ class CUB_Loader():
 				old_filename = os.path.join(self.image_dir, training_image_paths[idx])
 				
 				# move file
+				#print new_filename
 				os.rename(old_filename, new_filename)
 
 			for idx in range(len(testing_image_paths)):
@@ -139,19 +146,20 @@ class CUB_Loader():
 		if not (os.path.exists(self.background_dir)):
 			os.makedirs(self.background_dir)
 		if no_of_images is None:
-			no_of_images = self.avg_no_of_images_per_class
+			no_of_images = self.no_of_background_images
 		no_of_images_done = 0
 		no_of_total_trials = 0
 		self.background_image_path_list = []
-		while no_of_images_done < self.avg_no_of_images_per_class:
+		while no_of_images_done < self.no_of_background_images:
 			no_of_total_trials += 1
 			rand_idx = random.randint(1, self.no_of_images_in_dataset)
 			curr_img = self._remove_patch_from_img(rand_idx)
 			if (curr_img.shape[0] > self.min_width_bgd) and (curr_img.shape[1] > self.min_height_bgd):
 				no_of_images_done += 1
-				filename_curr = os.path.join(self.background_dir, 'bgd_img_'+str(no_of_images_done).zfill(len(str(no_of_images)))+'.png')
-				cv2.imwrite(filename_curr, curr_img)
-				self.background_image_path_list.append(filename_curr)
+				filename_base = 'bgd_img_'+str(no_of_images_done).zfill(len(str(no_of_images)))+'.png'
+				filename_full = os.path.join(self.background_dir, filename_base)
+				cv2.imwrite(filename_full, curr_img)
+				self.background_image_path_list.append(self.background_dir_basename + '/' + filename_base)
 			else:
 				continue
 		print "Generate {} images but I tried {} no of times".format(no_of_images, no_of_total_trials)
@@ -191,25 +199,23 @@ class CUB_Loader():
 		if self.split_done == False:
 			raise ValueError("You haven't split the data!!!")
 		image_size = (224,224)
-		no_of_training_images = 5994 # find data/train -type f | wc -l
-		all_sub_dirs = sorted(os.listdir(self.train_dir))
-		no_of_classes = len(all_sub_dirs)
-		X_train = np.empty((no_of_training_images,3)+image_size, dtype='float32') #dtype?
-		y_train = np.empty(no_of_training_images, dtype='int')
+		subdir_list = sorted(os.listdir(self.train_dir))
+		X_train = np.empty((self.no_of_training_images,3)+image_size, dtype='float32') #dtype?
+		y_train = np.empty(self.no_of_training_images, dtype='int')
 		# read, preprocess and dump all in single np array
-		category_idx = 0
-		image_idx = 0
+		image_idx_global = 0
 
-		print "no_of_classes : {}".format(no_of_classes)
-		print "no_of_training_images : {}".format(no_of_training_images)
-		for each_dir in all_sub_dirs:
-			curr_label = category_idx
-			all_images_category = os.listdir(os.path.join(self.train_dir, each_dir))
-			category_idx += 1
-			#print category_idx
-			for each_image in all_images_category:
-				image_file = os.path.join(os.path.join(self.train_dir, each_dir, each_image))
-				#print image_file
+		print "no_of_classes : {}".format(self.no_of_classes)
+		print "no_of_training_images : {}".format(self.no_of_training_images)
+
+		for subdir_idx in range(len(subdir_list)):
+			list_of_images = os.listdir(os.path.join(self.train_dir, subdir_list[subdir_idx]))
+			#print subdir_list[subdir_idx]
+			for image_idx in range(len(list_of_images)):
+				image_file = os.path.join(os.path.join(self.train_dir, subdir_list[subdir_idx], list_of_images[image_idx]))
+				#if subdir_idx == 200:
+					#print image_file
+					#print subdir_idx, image_idx_global
 				img = Image.open(image_file)
 				img = img.convert('RGB') # ensure 3 channel
 				img = img.resize(image_size, resample=Image.NEAREST)
@@ -218,23 +224,24 @@ class CUB_Loader():
 					img_array = img_array.transpose(2, 0, 1)
 				elif len(img_array.shape) == 2:
 					img_array = img_array.reshape((1, x.shape[0], x.shape[1]))
-				X_train[image_idx, ...] = img_array
-				y_train[image_idx] = category_idx #Labels are one indexed
-				image_idx += 1
-				#print image_idx
-				percent_done = float(image_idx)/no_of_training_images*100
-				if not image_idx%100:
-					sys.stdout.write("\r Loading training data. {}% done".format((float(image_idx)/no_of_training_images)*100))
+				X_train[image_idx_global, ...] = img_array
+				y_train[image_idx_global] = subdir_idx
+				image_idx_global += 1
+				if not image_idx_global%100:
+					sys.stdout.write("\r Loading training data. {}% done".format((float(image_idx_global)/self.no_of_training_images)*100))
 					sys.stdout.flush()
 
 		sys.stdout.write("\n")
-		y_train_one_hot = convert_to_one_hot(y_train, no_of_classes)
+		#print y_train.shape, y_train.max(), y_train.argmax()
+		#print y_train[5993], y_train[5994], y_train[-1]
+		y_train_one_hot = keras_np_utils.to_categorical(y_train, nb_classes=self.no_of_classes)
+		#y_train_one_hot = self.convert_to_one_hot(y_train, no_of_classes)
 		#print "{} : {}".format(y_train[-1], y_train_one_hot[-1])
 		#print "{} : {}".format(y_train[0], y_train_one_hot[0])
 		#print "{} : {}".format(y_train[100], y_train_one_hot[100])
 		return (X_train, y_train_one_hot)
 
-	def convert_to_one_hot(y_normal, no_of_classes):
+	def convert_to_one_hot(self, y_normal, no_of_classes):
 		y_one_hot = np.zeros((len(y_normal), no_of_classes+1))
 		y_one_hot[np.arange(len(y_normal)), y_normal] = 1
 		#print y_one_hot
@@ -253,10 +260,25 @@ class CUB_Loader():
 		x = K.repeat_elements(x,3,axis=2)
 		return x
 
+	def flatten_list(self, xs):
+		result = []
+		if isinstance(xs, (list, tuple)):
+			for x in xs:
+				result.extend(self.flatten_list(x))
+		else:
+			result.append(xs)
+		return result
+
+
 if __name__=='__main__':
-	CUBS = CUB_Loader(flag_split_train_test=0)
+	CUBS = CUB_Loader(flag_split_train_test=1)
 	# CUBS._get_data_statistics(details_per_dir=0)
-	# CUBS._split_into_train_and_test()
-	# CUBS._cubs_into_ram_all()
+	
+	#if ((not CUBS.split_done) and (CUBS.flag_split_train_test)):
+	#	CUBS._split_into_train_and_test()
+	#if CUBS.split_done:
+	#	CUBS._cubs_into_ram_all()
+	
+	CUBS._cubs_into_ram_all()
 	# CUBS._test_remove_patch_from_img(no_of_images_to_test=199)
-	CUBS._generate_background_images(no_of_images=60)
+	#CUBS._generate_background_images(no_of_images=60)

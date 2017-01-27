@@ -1,15 +1,16 @@
-from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Dropout, Input, Flatten, Reshape, merge, Merge, RepeatVector, Lambda # small m is functional api, caps is sequential
-from keras.layers.convolutional import Convolution2D, UpSampling2D, MaxPooling2D, ZeroPadding2D
-from keras.layers.normalization import BatchNormalization
-from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
-from keras.optimizers import SGD
-import cv2, os, sys
-import numpy as np
-import cubs_loader
-from keras import backend as K
-from keras.utils import np_utils
-from random import shuffle
+from keras.models import Sequential, Model 
+from keras.layers import Dense, Activation, Dropout, Input, Flatten, Reshape, merge, Merge, RepeatVector, Lambda # small m is functional api, caps is sequential 
+from keras.layers.convolutional import Convolution2D, UpSampling2D, MaxPooling2D, ZeroPadding2D 
+from keras.layers.normalization import BatchNormalization 
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img 
+from keras.optimizers import SGD 
+import cv2, os, sys 
+import numpy as np 
+import cubs_loader 
+from keras import backend as K 
+from keras.utils import np_utils as keras_np_utils 
+from random import shuffle 
+
 #K.set_image_dim_ordering('th')
 
 # random segnet like hack model
@@ -208,8 +209,8 @@ if __name__=='__main__':
 			# freeze discriminator while training combined model (or basically the generator)
 			discriminator.trainable = False
 
-			#generator_loss = combined_model.train_on_batch(image_batch, generator_labels) # todo what should be generator labels?
-			generator_loss=0
+			y_generator = keras_np_utils.to_categorical( [200] * batch_size )# background class is last label => idx 200 (there are 201 labels in total)
+			generator_loss = combined_model.train_on_batch(image_batch, y_generator)
 			print("Epoch : {0}, Batch : {1} of {2}, generator_loss : {3}".format(epoch_idx, batch_idx, no_of_batches, generator_loss))
 			
 			discriminator.trainable = True
