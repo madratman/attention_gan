@@ -149,7 +149,8 @@ def check_discriminator_training():
 def cubs_into_ram_all():
 	image_size = (224,224)
 	no_of_training_images = 5994 # find data/train -type f | wc -l
-	train_dir = os.path.join(os.getcwd(),'data/train')
+	repo_path = os.path.dirname(os.path.realpath(__file__))
+	train_dir = os.path.join(repo_path,'data/train')
 	all_sub_dirs=sorted(os.listdir(train_dir))
 	no_of_classes = len(all_sub_dirs)
 	X_train = np.empty((no_of_training_images,3)+image_size, dtype='float32') #dtype?
