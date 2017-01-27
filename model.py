@@ -9,7 +9,6 @@ import numpy as np
 import cubs_loader
 from keras import backend as K
 from keras.utils import np_utils
-from PIL import Image
 from random import shuffle
 #K.set_image_dim_ordering('th')
 
@@ -144,73 +143,6 @@ def check_discriminator_training():
 						class_mode = 'categorical')
 
 	discriminator.fit_generator(train_generator, samples_per_epoch=2000, nb_epoch=50)
-
-# load everything into ram and manually generate batches. will take ~10GB for 6000 224*224 images
-def cubs_into_ram_all():
-	image_size = (224,224)
-	no_of_training_images = 5994 # find data/train -type f | wc -l
-	repo_path = os.path.dirname(os.path.realpath(__file__))
-	train_dir = os.path.join(repo_path,'data/train')
-	all_sub_dirs=sorted(os.listdir(train_dir))
-	no_of_classes = len(all_sub_dirs)
-	X_train = np.empty((no_of_training_images,3)+image_size, dtype='float32') #dtype?
-	y_train = np.empty(no_of_training_images, dtype='int')
-	# read, preprocess and dump all in single np array
-	category_idx = 0
-	image_idx = 0
-
-	print "no_of_classes : {}".format(no_of_classes)
-	print "no_of_training_images : {}".format(no_of_training_images)
-	for each_dir in all_sub_dirs:
-		curr_label = category_idx
-		all_images_category = os.listdir(os.path.join(train_dir, each_dir))
-		category_idx += 1
-		#print category_idx
-		for each_image in all_images_category:
-			image_file = os.path.join(os.path.join(train_dir, each_dir, each_image))
-			#print image_file
-			img = Image.open(image_file)
-			img = img.convert('RGB') # ensure 3 channel
-			img = img.resize(image_size, resample=Image.NEAREST)
-			img_array = np.asarray(img, dtype='float32')
-			if len(img_array.shape) == 3:
-				img_array = img_array.transpose(2, 0, 1)
-			elif len(img_array.shape) == 2:
-				img_array = img_array.reshape((1, x.shape[0], x.shape[1]))
-			X_train[image_idx, ...] = img_array
-			y_train[image_idx] = category_idx #Labels are one indexed
-			image_idx += 1
-			#print image_idx
-			percent_done = float(image_idx)/no_of_training_images*100
-			if not image_idx%100:
-				sys.stdout.write("\r Loading training data. {}% done".format((float(image_idx)/no_of_training_images)*100))
-				sys.stdout.flush()
-
-	sys.stdout.write("\n")
-	y_train_one_hot = convert_to_one_hot(y_train, no_of_classes)
-	#print "{} : {}".format(y_train[-1], y_train_one_hot[-1])
-	#print "{} : {}".format(y_train[0], y_train_one_hot[0])
-	#print "{} : {}".format(y_train[100], y_train_one_hot[100])
-	return (X_train, y_train_one_hot)
-
-def convert_to_one_hot(y_normal, no_of_classes):
-	y_one_hot = np.zeros((len(y_normal), no_of_classes+1))
-	y_one_hot[np.arange(len(y_normal)), y_normal] = 1
-	#print y_one_hot
-	y_one_hot = np.delete(y_one_hot,0,axis=1) # delete first column coz we dont care about 0 label
-	#print y_one_hot
-	return y_one_hot
-
-def test_convert_to_one_hot():
-	y_normal = [4,2,1,4,3,1,2,3]
-	no_of_classes = 4
-	y_one_hot = convert_to_one_hot(y_normal, no_of_classes)
-	for idx in range(len(y_normal)):
-		print "{} : {}".format(y_normal[idx], y_one_hot[idx])
-
-def make_three_channel(x):
-	x = K.repeat_elements(x,3,axis=2)
-	return x
 
 if __name__=='__main__':
 	#check_discriminator_training()
