@@ -231,7 +231,16 @@ class CUB_Loader():
 					sys.stdout.write("\r Loading training data. {}% done".format((float(image_idx_global)/self.no_of_training_images)*100))
 					sys.stdout.flush()
 
-		sys.stdout.write("\n")
+		sys.stdout.write("\n Done! \n")
+
+		print "X_train[:,1-2-3,:,:].mean()", X_train[:,0,:,:].mean(), X_train[:,1,:,:].mean(), X_train[:,2,:,:].mean()
+		print "standardizing"
+		X_train[:,0,:,:] -= X_train[:,0,:,:].mean()
+		X_train[:,1,:,:] -= X_train[:,1,:,:].mean()
+		X_train[:,2,:,:] -= X_train[:,2,:,:].mean() 
+		print "X_train[:,1-2-3,:,:].mean()", X_train[:,0,:,:].mean(), X_train[:,1,:,:].mean(), X_train[:,2,:,:].mean()
+		print "X_train[:,1-2-3,:,:].std()", X_train[:,0,:,:].std(), X_train[:,1,:,:].std(), X_train[:,2,:,:].std() 
+
 		#print y_train.shape, y_train.max(), y_train.argmax()
 		#print y_train[5993], y_train[5994], y_train[-1]
 		y_train_one_hot = keras_np_utils.to_categorical(y_train, nb_classes=self.no_of_classes)

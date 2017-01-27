@@ -151,7 +151,7 @@ if __name__=='__main__':
 
 	# todo make config file
 	batch_size = 16
-	no_of_epochs = 10
+	no_of_epochs = 100
 
 	CUBS = cubs_loader.CUB_Loader(flag_split_train_test=0)
 	#if ((not CUBS.split_done) and (CUBS.flag_split_train_test)):
@@ -200,7 +200,7 @@ if __name__=='__main__':
 	save_every_nth = 25
 	repo_path = os.path.dirname(os.path.realpath(__file__))
 	import datetime
-	logdir = os.path.join(os.getcwd(), datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+	logdir = os.path.join(repo_path, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 	os.makedirs(logdir)
 
 	weights_dir_gen = os.path.join(logdir, 'weights/gen')
@@ -212,8 +212,10 @@ if __name__=='__main__':
 
 	logfile_gen = os.path.join(logdir, 'loss_gen.txt')
 	logfile_disc = os.path.join(logdir, 'loss_disc.txt')
+	logfile_both = os.path.join(logdir, 'loss_both.txt')
 	open(logfile_gen, 'a').close()
 	open(logfile_disc, 'a').close()
+	open(logfile_both, 'a').close()
 
 	no_of_digits_in_total_batches = len(str(no_of_epochs*no_of_batches_per_epoch))
 	cumulative_batch_idx = 0
@@ -253,11 +255,15 @@ if __name__=='__main__':
 				f.write(curr_log_gen+'\n')
 			with open(logfile_disc, "a") as f:
 				f.write(curr_log_disc+'\n')
+			with open(logfile_both, "a") as f:
+				f.write(curr_log_disc+'\n')
+				f.write(curr_log_gen+'\n\n')
+
 			if cumulative_batch_idx%save_every_nth==0:
 				# there's certaintly a better way for this convoluted thing. but can't care enough.
 				reqd_str = str(cumulative_batch_idx).zfill(no_of_digits_in_total_batches)
 				combined_model.save(os.path.join(weights_dir_combined,'combined_batch_'+reqd_str+'.h5'))
 				discriminator.save(os.path.join(weights_dir_disc, 'disc_batch_'+reqd_str+'.h5'))
-				generator.save(os.path,join(weights_dir_gen, 'gen_batch_'+reqd_str+'.h5'))
+				generator.save(os.path.join(weights_dir_gen, 'gen_batch_'+reqd_str+'.h5'))
 
 			# todo save weights, masks, images, etc
