@@ -4,6 +4,7 @@ from pprint import pprint
 if not (os.uname()[1]=='ratneshmadaan-Inspiron-N5010'):
 	from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
 from PIL import Image
+import random
 
 # the original cubs dataset has each type of bird's image's in a diff subfolder. Let's first put these into a single train and test folder
 # (the split is specified in train_test_split.txt), so that we can use keras' data preprocessors
@@ -24,19 +25,31 @@ class CUB_Loader():
 		self.segmentation_label_dir = 'data/segmentations'
 		self.flag_split_train_test = flag_split_train_test
 		self.split_done = False
+		self.avg_no_of_images_per_class = 59
+		self.no_of_background_images = self.avg_no_of_images_per_class * 2
+		self.no_of_images_in_dataset = 11788
+		self.min_height_bgd = 200
+		self.min_width_bgd = 200
+		self.background_dir = os.path.join(self.image_dir, '201.Background')
+		self.background_image_path_list = []
+
 		if os.path.exists(self.train_dir):
 			self.split_done = True
 
 		# http://stackoverflow.com/questions/1747817/create-a-dictionary-with-list-comprehension-in-python
 		# d = dict((key, value) for (key, value) in iterable)
-		self.image_names = {}
+		self.image_id_name_map = {}
 		with open(self.image_id_mapping_file) as f:
-			self.image_names = dict( (int(line.split()[0]), line.split()[1]) for line in f.readlines())
+			self.image_id_name_map = dict( (int(line.split()[0]), line.split()[1]) for line in f.readlines())
 
 		# this is like : 8018: ['104.0', '95.0', '212.0', '154.0']
-		self.bboxes = {}
+		self.bboxes_map = {}
 		with open(self.bounding_box_file) as f:
-			self.bboxes = dict( (int(line.split()[0]), line.split()[1:]) for line in f.readlines() )
+			for line in f.readlines():
+				image_idx = int(line.split()[0])
+				bbox = line.split()[1:]
+				bbox = [int(float(x)) for x in bbox]
+				self.bboxes_map[image_idx] = bbox
 
 		# train has value = 1
 		with open(self.train_test_flag_file) as f:
@@ -65,16 +78,18 @@ class CUB_Loader():
 			print "len(train_idx_list) : ", len(train_idx_list) # 5994
 			print "len(test_idx_list) : ", len(test_idx_list) # 5794
 
-			image_id_dict = {}
-			with open(self.image_id_mapping_file) as file:
-				for each_line in file:
-					curr_list = [element.strip() for element in each_line.split(' ')]
-					image_id_dict[int(curr_list[0])] = curr_list[1]
+			# background_parent_image_indices = random.sample(train_idx_list, self.avg_no_of_images_per_class)
+			# background_parent_image_paths = [self.image_id_name_map[index] for index in background_parent_image_indices]
+			# background_parent_image_bbox = [self.bboxes_map[index] for index in background_parent_image_indices]
+			# pprint(zip(background_parent_image_paths, background_parent_image_bbox))
 
-			training_image_paths = [image_id_dict[train_id] for train_id in train_idx_list]
-			testing_image_paths = [image_id_dict[test_id] for test_id in test_idx_list]
+			training_image_paths = [self.image_id_name_map[train_idx] for train_idx in train_idx_list]
+			testing_image_paths = [self.image_id_name_map[test_idx] for test_idx in test_idx_list]
 			# pprint(training_image_paths)
 			# pprint(testing_image_paths)
+			self._generate_background_images(no_of_images=self.no_of_background_images) # this function fills self.background_image_path_list as well
+			training_image_paths.append(self.background_image_path_list[:self.no_of_background_images//2]) #take first half as they are generated randomly anyway
+			testing_image_paths.append(self.background_image_path_list[self.no_of_background_images//2:]) #take first half as they are generated randomly anyway
 
 			for idx in range(len(training_image_paths)):
 				directory_name = training_image_paths[idx].split('/')[0]
@@ -118,17 +133,58 @@ class CUB_Loader():
 			no_of_images_arr[class_idx] = no_of_files_curr
 		print "mean number of images : {}".format(no_of_images_arr.mean())
 		print "stdeviation of images : {}".format(no_of_images_arr.std())
+		self.avg_no_of_images_per_class = int(no_of_images_arr.mean())
 
-	def _get_image_sizes(self):
-		class_list = sorted(os.listdir(self.image_dir))
-		no_of_images_arr = np.empty(len(class_list))
-		for class_idx in range(len(class_list)):
-			print class_idx
-			curr_dir = os.path.join(self.image_dir, class_list[class_idx])
-			list_of_images = sorted(os.listdir(curr_dir))
-			for image_idx in range(len(list_of_images)):
-				# print list_of_images[image_idx]
-				curr_image = cv2.imread(os.path.join(curr_dir, list_of_images[image_idx]))
+	def _generate_background_images(self, no_of_images=None):
+		if not (os.path.exists(self.background_dir)):
+			os.makedirs(self.background_dir)
+		if no_of_images is None:
+			no_of_images = self.avg_no_of_images_per_class
+		no_of_images_done = 0
+		no_of_total_trials = 0
+		self.background_image_path_list = []
+		while no_of_images_done < self.avg_no_of_images_per_class:
+			no_of_total_trials += 1
+			rand_idx = random.randint(1, self.no_of_images_in_dataset)
+			curr_img = self._remove_patch_from_img(rand_idx)
+			if (curr_img.shape[0] > self.min_width_bgd) and (curr_img.shape[1] > self.min_height_bgd):
+				no_of_images_done += 1
+				filename_curr = os.path.join(self.background_dir, 'bgd_img_'+str(no_of_images_done).zfill(len(str(no_of_images)))+'.png')
+				cv2.imwrite(filename_curr, curr_img)
+				self.background_image_path_list.append(filename_curr)
+			else:
+				continue
+		print "Generate {} images but I tried {} no of times".format(no_of_images, no_of_total_trials)
+
+	def _remove_patch_from_img(self, image_idx, imshow_flag=0):
+		image_path = self.image_id_name_map[image_idx]
+		bbox = self.bboxes_map[image_idx] # x, y, width, height
+		img_array = cv2.imread(os.path.join(self.image_dir, image_path))
+		width = bbox[2]
+		height = bbox[3]
+		if width <= height:
+			leftmost = bbox[0]
+			left_side_of_bbox = img_array[:, 0:leftmost]
+			right_side_of_bbox = img_array[:, leftmost+width:]
+			img_minus_bbox = np.concatenate((left_side_of_bbox,right_side_of_bbox), axis=1)
+		else:
+			topmost = bbox[1]
+			above_the_box = img_array[0:topmost, :]
+			below_the_box = img_array[topmost+height:, :]
+			img_minus_bbox = np.concatenate((above_the_box, below_the_box), axis=0)
+
+		if imshow_flag==1:
+			cv2.rectangle(img_array, (bbox[0], bbox[1]), (bbox[0]+bbox[2], bbox[1]+bbox[3]), (0,0,255), 4)
+			cv2.imshow("img_minus_bbox", img_minus_bbox)
+			cv2.imshow("img_orig", img_array)
+			cv2.waitKey(500)
+
+		return img_minus_bbox
+
+	def _test_remove_patch_from_img(self, no_of_images_to_test=100, imshow_flag=1):
+		# dear future self, note that image_idx in all the dicts is 1 indexed due to dataset convention
+		for n in range(no_of_images_to_test):
+			self._remove_patch_from_img(n+1, imshow_flag)
 
 	# load everything into ram and manually generate batches. will take ~10GB for 6000 224*224 images
 	def _cubs_into_ram_all(self):
@@ -199,6 +255,8 @@ class CUB_Loader():
 
 if __name__=='__main__':
 	CUBS = CUB_Loader(flag_split_train_test=0)
-	CUBS._get_data_statistics(details_per_dir=0)
-	CUBS._split_into_train_and_test()
+	# CUBS._get_data_statistics(details_per_dir=0)
+	# CUBS._split_into_train_and_test()
 	# CUBS._cubs_into_ram_all()
+	# CUBS._test_remove_patch_from_img(no_of_images_to_test=199)
+	CUBS._generate_background_images(no_of_images=60)
