@@ -1,5 +1,5 @@
 from keras.models import Sequential, Model 
-from keras.layers import Dense, Activation, Dropout, Input, Flatten, Reshape, merge, Merge, RepeatVector, Lambda # small m is functional api, caps is sequential 
+from keras.layers import Dense, Activation, Dropout, Input, Flatten, Reshape, merge, Merge, RepeatVector, Lambda, ActivityRegularization # small m is functional api, caps is sequential 
 from keras.layers.convolutional import Convolution2D, UpSampling2D, MaxPooling2D, ZeroPadding2D 
 from keras.layers.normalization import BatchNormalization 
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img 
@@ -10,6 +10,7 @@ import cubs_loader
 from keras import backend as K 
 from keras.utils import np_utils as keras_np_utils 
 from random import shuffle 
+from keras.regularizers import l2, activity_l2
 
 #K.set_image_dim_ordering('th')
 
@@ -26,47 +27,48 @@ def generator_model():
 	model.add(Activation('relu'))
 	model.add(MaxPooling2D(pool_size=(2,2), border_mode='same')) #TODO to stride=2 or not?
 
-	model.add(Convolution2D(128,3,3,border_mode='same'))
+	model.add(Convolution2D(128,3,3,border_mode='same', activity_regularizer=activity_l2(0.01)))
 	# model.add(Convolution2D(128,3,3,border_mode='same'))
 	model.add(BatchNormalization())
 	model.add(Activation('relu'))
 	model.add(MaxPooling2D(pool_size=(2,2), border_mode='same'))
 
-	model.add(Convolution2D(256, 3, 3, border_mode='same'))
+	model.add(Convolution2D(256, 3, 3, border_mode='same', activity_regularizer=activity_l2(0.01)))
 	model.add(BatchNormalization())
 	model.add(Activation('relu'))
 	model.add(MaxPooling2D(pool_size=(2,2), border_mode='same'))
 
-	model.add(Convolution2D(512, 3, 3, border_mode='same'))
+	model.add(Convolution2D(512, 3, 3, border_mode='same', activity_regularizer=activity_l2(0.01)))
 	model.add(BatchNormalization())
 	model.add(Activation('relu'))
 
 	# decoder
-	model.add(Convolution2D(512,3,3,border_mode='same'))
+	model.add(Convolution2D(512,3,3,border_mode='same', activity_regularizer=activity_l2(0.01)))
 	model.add(BatchNormalization())
 
 	model.add(UpSampling2D(size=(2,2))) #todo
-	model.add(Convolution2D(256,3,3,border_mode='same'))
+	model.add(Convolution2D(256,3,3,border_mode='same',activity_regularizer=activity_l2(0.01)))
 	model.add(BatchNormalization())
 	model.add(Activation('relu'))
 
 	model.add(UpSampling2D(size=(2,2))) #todo
-	model.add(Convolution2D(128,3,3,border_mode='same'))
+	model.add(Convolution2D(128,3,3,border_mode='same', activity_regularizer=activity_l2(0.01)))
 	model.add(BatchNormalization())
 	model.add(Activation('relu'))
 
 	model.add(UpSampling2D(size=(2,2))) #todo
-	model.add(Convolution2D(64,3,3,border_mode='same'))
+	model.add(Convolution2D(64,3,3,border_mode='same', activity_regularizer=activity_l2(0.01)))
 	model.add(BatchNormalization())
 	model.add(Activation('relu'))
 
-	model.add(Convolution2D(1,1,1, border_mode='same')) # single mask output using 1*! convs
+	model.add(Convolution2D(1,1,1, border_mode='same', activity_regularizer=activity_l2(0.01))) # single mask output using 1*! convs
 	model.add(Activation('relu'))
 
 	# softmax over spatial dimensions as it's a probability mask
 	model.add(Reshape((1,224*224))) # keras applies softmax on trailing dim.  
 	model.add(Activation('softmax'))
 	model.add(Reshape((224,224)))
+	#model.add(ActivityRegularization(l2))
 	return model
 
 # vgg19 https://gist.github.com/baraldilorenzo/8d096f48a1be4a2d660d

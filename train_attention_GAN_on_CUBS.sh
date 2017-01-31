@@ -8,4 +8,4 @@
 #SBATCH -o attention_gan_%j.out      # File to which STDOUT will be written
 #SBATCH -e attention_gan_%j.err      # File to which STDERR will be written
 
-srun nvidia-docker run --rm -v /home/$USER:/home/$USER madratman/theano_keras_cuda8_cudnn5 python /home/ratneshm/projects/attention_gan/model.py
+srun nvidia-docker run --rm -e CUDA_VISIBLE_DEVICES=`echo $CUDA_VISIBLE_DEVICES` -v /home/$USER:/home/$USER madratman/theano_keras_cuda8_cudnn5 python /home/ratneshm/projects/attention_gan/model.py
